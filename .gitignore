@@ -1,0 +1,5 @@
+.scrapy
+.idea
+*.xlsx
+.DS_Store
+*.pyc

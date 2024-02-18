@@ -1,0 +1,2 @@
+scrapy==2.8.0
+scrapy-xlsx==0.1.1
