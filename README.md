@@ -1,5 +1,5 @@
-# Knizhoven Pazar Scraper
-Downloand your inventory from https://knizhen-pazar.net/. 
+# Knizhen Pazar Scraper
+Scraper that downloands your inventory from https://knizhen-pazar.net/ to excel file.
 
 ### Setup
 ```bash
