@@ -54,23 +54,31 @@ class BooksSpider(scrapy.Spider):
         # Check if login was successful
         if response.url == 'https://knizhen-pazar.net/':
             self.log("Login successful")
-            next_page_url = 'https://knizhen-pazar.net/stands/40061/products/books/'
+
+            link_to_books_for_sale = response.xpath(
+                '//a[contains(text(), "Книги за продажба")]/@href').get()
 
             # Request the next page and handle it with another callback method
-            yield scrapy.Request(url=next_page_url, callback=self.parse_next_page)
+            yield scrapy.Request(url=link_to_books_for_sale, callback=self.parse_next_page, meta={'section': 'Чакащи Вашата редакция или преглед'}, dont_filter=True)
+            yield scrapy.Request(url=link_to_books_for_sale, callback=self.parse_next_page, meta={'section': 'Непрегледани от валидатор*'})
+            yield scrapy.Request(url=link_to_books_for_sale, callback=self.parse_next_page, meta={'section': 'Прегледани от валидатор (изчакват публикация)**'})
+            yield scrapy.Request(url=link_to_books_for_sale, callback=self.parse_next_page, meta={'section': 'Публикувани'}, dont_filter=True)
         else:
             self.log("Login failed", level=logging.ERROR)
 
     def parse_next_page(self, response):
+        section = response.meta['section']
+
         # Assuming `response` is your variable containing the full HTML content
-        sel = Selector(text=response.text)
+        sel = Selector(text=response.text).xpath(
+            f'//section[h2[contains(text(), "{section}")]]')
 
         # Define the base XPath to select each book row in the "Публикувани" section
         books = sel.xpath(
-            '//section[h2[contains(text(), "Публикувани")]]//ol[@class="table-_tbl"]/li[@class="t_product"]/ol[@class="tbl__row"]')
+            f'//section[h2[contains(text(), "{section}")]]//ol[@class="table-_tbl"]/li[@class="t_product"]/ol[@class="tbl__row"]')
 
         books += sel.xpath(
-            '//section[h2[contains(text(), "Публикувани")]]//ol[@class="table-_tbl"]/li[@class="t_product"]/ol[@class="tbl__row tbl__row--on_even_position"]')
+            f'//section[h2[contains(text(), "{section}")]]//ol[@class="table-_tbl"]/li[@class="t_product"]/ol[@class="tbl__row tbl__row--on_even_position"]')
 
         # Iterate over each book to extract details
         for book in books:
@@ -86,12 +94,13 @@ class BooksSpider(scrapy.Spider):
                 entry_date=book.xpath(
                     './/li[@data-label="Въвеждане: "]//div[@class="js_hover_next_tag"]/text()').extract_first(),
                 action_link=book.xpath('.//li[@data-label="Действие: "]/a/@href').extract_first(),
-                note_value=book.xpath('//input[@id="published_product_note"]/@value').get()
+                note_value=book.xpath('//input[@id="published_product_note"]/@value').get(),
+                section = section
             )
             yield item
 
         # Extract the next page URL
-        next_page_url = response.css('a[rel="next"]::attr(href)').get()
+        next_page_url = sel.css('a[rel="next"]::attr(href)').get()
 
         if next_page_url:
             # If a next page URL is found, make a full URL by combining the base URL with the extracted path
@@ -101,4 +110,4 @@ class BooksSpider(scrapy.Spider):
             self.logger.info('Next page URL: %s', next_page_url)
 
             # Follow the next page URL
-            yield scrapy.Request(next_page_url, callback=self.parse_next_page)
+            yield scrapy.Request(next_page_url, callback=self.parse_next_page, meta={'section': section})
