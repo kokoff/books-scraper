@@ -84,7 +84,7 @@ class BooksSpider(scrapy.Spider):
         for book in books:
             item = dict(
                 edit_link=book.xpath('.//li[@data-label="Промени: "]/a/@href').extract_first(),
-                book_id=book.xpath('.//li[@data-label="№: "]/b/text()').extract_first(),
+                book_id=book.xpath('.//li[@data-label="№: "]/b/text() | .//li[@data-label="№: "]/text()').extract_first(),
                 image_link=book.xpath('.//li[@data-label="-: "]//img/@src').extract_first(),
                 title=book.xpath('.//li[@data-label="Заглавие: "]/a/text()').extract_first(),
                 author=book.xpath('.//li[@data-label="Автор: "]/a/text()').extract_first(),
