@@ -1,5 +1,5 @@
 # Knizhoven Pazar Scraper
-
+Downloand your inventory from https://knizhen-pazar.net/. 
 
 ### Setup
 ```bash
