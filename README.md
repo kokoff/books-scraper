@@ -9,7 +9,8 @@ pip install -r requirements.txt
 ### Credentials
 Credentials can be provided as environment variables or as arguments to the `scrapy crawl` command.
 ```bash
-export USERNAME=
+export USERNAME=your username
+export PASSWORD=ypur password
 ```
 
 ### Usage
