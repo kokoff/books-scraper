@@ -4,6 +4,11 @@ import os
 import scrapy
 from scrapy import Selector
 
+import warnings
+
+
+warnings.filterwarnings("ignore", category=UserWarning, module='scrapy.selector.unified')
+
 
 class BooksSpider(scrapy.Spider):
     name = 'books'
@@ -59,19 +64,28 @@ class BooksSpider(scrapy.Spider):
                 '//a[contains(text(), "Книги за продажба")]/@href').get()
 
             # Request the next page and handle it with another callback method
-            yield scrapy.Request(url=link_to_books_for_sale, callback=self.parse_next_page, meta={'section': 'Чакащи Вашата редакция или преглед'}, dont_filter=True)
-            yield scrapy.Request(url=link_to_books_for_sale, callback=self.parse_next_page, meta={'section': 'Непрегледани от валидатор*'})
-            yield scrapy.Request(url=link_to_books_for_sale, callback=self.parse_next_page, meta={'section': 'Прегледани от валидатор (изчакват публикация)**'})
-            yield scrapy.Request(url=link_to_books_for_sale, callback=self.parse_next_page, meta={'section': 'Публикувани'}, dont_filter=True)
+            yield scrapy.Request(url=link_to_books_for_sale, callback=self.parse_next_page,
+                                 meta={'section': 'Чакащи Вашата редакция или преглед'},
+                                 dont_filter=True)
+            yield scrapy.Request(url=link_to_books_for_sale, callback=self.parse_next_page,
+                                 meta={'section': 'Непрегледани от валидатор*'},
+                                 dont_filter=True)
+            yield scrapy.Request(url=link_to_books_for_sale, callback=self.parse_next_page,
+                                 meta={
+                                     'section': 'Прегледани от валидатор (изчакват публикация)**'},
+                                 dont_filter=True),
+            yield scrapy.Request(url=link_to_books_for_sale, callback=self.parse_next_page,
+                                 meta={'section': 'Публикувани'},
+                                 dont_filter=True)
         else:
             self.log("Login failed", level=logging.ERROR)
 
     def parse_next_page(self, response):
+        # self.logger.info(f'Processing {response}, cached={"cached" in response.flags}')
         section = response.meta['section']
 
         # Assuming `response` is your variable containing the full HTML content
-        sel = Selector(text=response.text).xpath(
-            f'//section[h2[contains(text(), "{section}")]]')
+        sel = Selector(text=response.text).xpath(f'//section[h2[contains(text(), "{section}")]]')
 
         # Define the base XPath to select each book row in the "Публикувани" section
         books = sel.xpath(
@@ -80,11 +94,23 @@ class BooksSpider(scrapy.Spider):
         books += sel.xpath(
             f'//section[h2[contains(text(), "{section}")]]//ol[@class="table-_tbl"]/li[@class="t_product"]/ol[@class="tbl__row tbl__row--on_even_position"]')
 
+        # Extract the next page URL
+        next_page_url = sel.css('a[rel="next"]::attr(href)').get()
+
+        if next_page_url:
+            # If a next page URL is found, make a full URL by combining the base URL with the extracted path
+            next_page_url = response.urljoin(next_page_url)
+
+            # Follow the next page URL
+            yield scrapy.Request(next_page_url, callback=self.parse_next_page,
+                                 meta={'section': section})
+
         # Iterate over each book to extract details
         for book in books:
             item = dict(
                 edit_link=book.xpath('.//li[@data-label="Промени: "]/a/@href').extract_first(),
-                book_id=book.xpath('.//li[@data-label="№: "]/b/text() | .//li[@data-label="№: "]/text()').extract_first(),
+                book_id=book.xpath(
+                    './/li[@data-label="№: "]/b/text() | .//li[@data-label="№: "]/text()').extract_first(),
                 image_link=book.xpath('.//li[@data-label="-: "]//img/@src').extract_first(),
                 title=book.xpath('.//li[@data-label="Заглавие: "]/a/text()').extract_first(),
                 author=book.xpath('.//li[@data-label="Автор: "]/a/text()').extract_first(),
@@ -94,20 +120,26 @@ class BooksSpider(scrapy.Spider):
                 entry_date=book.xpath(
                     './/li[@data-label="Въвеждане: "]//div[@class="js_hover_next_tag"]/text()').extract_first(),
                 action_link=book.xpath('.//li[@data-label="Действие: "]/a/@href').extract_first(),
-                note_value=book.xpath('//input[@id="published_product_note"]/@value').get(),
-                section = section
+                note_value=book.xpath('.//input[@id="published_product_note"]/@value').get(),
+                section=section
             )
-            yield item
 
-        # Extract the next page URL
-        next_page_url = sel.css('a[rel="next"]::attr(href)').get()
+            book_detail_url = item['edit_link'].rsplit('/', 1)[0]
 
-        if next_page_url:
-            # If a next page URL is found, make a full URL by combining the base URL with the extracted path
-            next_page_url = response.urljoin(next_page_url)
+            yield scrapy.Request(book_detail_url, callback=self.parse_details,
+                                 meta={'item': item})
 
-            # Log the next page URL (optional)
-            self.logger.info('Next page URL: %s', next_page_url)
+    def parse_details(self, response):
+        # self.logger.info(f'Processing {response}, cached={"cached" in response.flags}')
 
-            # Follow the next page URL
-            yield scrapy.Request(next_page_url, callback=self.parse_next_page, meta={'section': section})
+        item = response.meta['item']
+
+        sel = response.xpath('//ol[@class="prdp__attributes prdp__attributes--left margin_top_10"]')
+
+        for li in sel.xpath('./li'):
+            label = li.xpath('.//div[@class="prdp__label"]/text()').get()
+            value = li.xpath(
+                './/div[@class="prdp__value"]/text() | .//div[@class="prdp__value"]/a/text()').get()
+            item[label] = value
+
+        yield item
