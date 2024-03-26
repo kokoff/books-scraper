@@ -7,15 +7,28 @@ pip install -r requirements.txt
 ```
 
 ### Credentials
-Credentials can be provided as environment variables or as arguments to the `scrapy crawl` command.
+Credentials can be provided as environment variables 
 ```bash
 export USERNAME=your username
 export PASSWORD=ypur password
 ```
+or as arguments to the `scrapy crawl` command
+```bash
+python -m scrapy crawl ... -a username=your email -a password=your password
+```
 
 ### Usage
+Scrape books for sale
 ```bash
-python -m scrapy crawl books -o books.xlsx -a username=your email -a password=your password
+python -m scrapy crawl books -o books.xlsx
+```
+Scrape offsale books
+```bash
+python -m scrapy crawl offsale -o offsale.xlsx
+```
+Scrape balance
+```bash
+python -m scrapy crawl balance -o balance.xlsx
 ```
 
 ### Delete Cache
